@@ -145,6 +145,16 @@ function watch () {
 }
 
 /* task exports */
-exports.watch = watch
-exports.build = gulp.series( gulp.parallel( buildContentCSS, buildContentJS, buildBackgroundJS, buildPopupJS, buildOptionsCSS, buildOptionsJS ), copyProjectFiles )
-exports.package = package
+const build = gulp.series( gulp.parallel( buildContentCSS, buildContentJS, buildBackgroundJS, buildPopupJS, buildOptionsCSS, buildOptionsJS ), copyProjectFiles );
+
+// Gulp 3 compatible task registration
+gulp.task('watch', watch);
+gulp.task('build', build);
+gulp.task('default', build);
+gulp.task('package', package);
+
+// Also keep exports for Gulp 4 CLI
+exports.watch = watch;
+exports.build = build;
+exports.default = build;
+exports.package = package;

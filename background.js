@@ -67,4 +67,109 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
-}); 
+});
+
+// Cache the intercept setting for faster synchronous access
+let interceptEnabled = true;
+chrome.storage.local.get(['intercept_torrent_downloads'], (data) => {
+  interceptEnabled = data.intercept_torrent_downloads !== false;
+});
+
+// Update cache when setting changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.intercept_torrent_downloads) {
+    interceptEnabled = changes.intercept_torrent_downloads.newValue !== false;
+  }
+});
+
+// Download interception for .torrent files
+chrome.downloads.onCreated.addListener((downloadItem) => {
+  debugLog('debug', 'Download detected:', downloadItem);
+
+  // Quick synchronous check
+  if (!interceptEnabled) {
+    return;
+  }
+
+  // Check if this is a torrent file
+  const isTorrentFile =
+    downloadItem.mime === 'application/x-bittorrent' ||
+    downloadItem.filename?.endsWith('.torrent') ||
+    downloadItem.url?.endsWith('.torrent');
+
+  if (!isTorrentFile) {
+    debugLog('debug', 'Not a torrent file, ignoring');
+    return;
+  }
+
+  debugLog('important', 'Torrent file download detected, intercepting:', downloadItem.filename);
+
+  // Immediately cancel the browser download
+  chrome.downloads.cancel(downloadItem.id, () => {
+    debugLog('log', 'Browser download cancelled');
+
+    // Erase the download from history
+    chrome.downloads.erase({ id: downloadItem.id }, () => {
+      debugLog('log', 'Download erased from history');
+    });
+  });
+
+  // Fetch the torrent file content
+  debugLog('log', 'Fetching torrent file from:', downloadItem.url);
+
+  fetch(downloadItem.url, {
+    credentials: 'include',
+    headers: {
+      'Accept': 'application/x-bittorrent'
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.arrayBuffer();
+  })
+  .then(arrayBuffer => {
+    debugLog('log', 'Torrent file fetched successfully, size:', arrayBuffer.byteLength);
+
+    // Convert to base64
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+
+    debugLog('log', 'Torrent file encoded to base64, length:', base64.length);
+
+    // Send to Deluge using the global initialized connection
+    const filename = downloadItem.filename || 'download.torrent';
+
+    delugeConnection.addTorrentFile(base64, filename)
+      .then(() => {
+        debugLog('important', 'Torrent added to Deluge successfully:', filename);
+
+        // Show success notification
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'images/icon-48.png',
+          title: 'DelugeFlow: Torrent Added',
+          message: `Successfully added: ${filename}`
+        });
+      })
+      .catch(error => {
+        debugLog('error', 'Failed to add torrent to Deluge:', error);
+      });
+  })
+  .catch(error => {
+    debugLog('error', 'Failed to fetch torrent file:', error);
+
+    // Show error notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'images/icon-48.png',
+      title: 'DelugeFlow: Download Failed',
+      message: `Failed to intercept torrent: ${error.message}`
+    });
+  });
+});

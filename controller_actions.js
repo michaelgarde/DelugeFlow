@@ -176,6 +176,76 @@ DelugeConnection.prototype.addTorrent = function(url, cookies, plugins, options,
   return this._addTorrentToCurrentServer(url, cookies, plugins, options);
 };
 
+DelugeConnection.prototype.addTorrentFile = function(filedata, filename, options, plugins, serverIndex) {
+  debugLog('log', '[addTorrentFile] Called with filename:', filename, 'options:', options, 'serverIndex:', serverIndex);
+
+  // If serverIndex is provided, connect to that server first
+  if (serverIndex !== undefined) {
+    return this.connectToServer(serverIndex).then(() => {
+      return this._addTorrentFileToCurrentServer(filedata, filename, options, plugins);
+    });
+  }
+
+  // Otherwise use current/primary server
+  return this._addTorrentFileToCurrentServer(filedata, filename, options, plugins);
+};
+
+DelugeConnection.prototype._addTorrentFileToCurrentServer = function(filedata, filename, options, plugins) {
+  if (!this.SERVER_URL) {
+    const error = new Error('SERVER_URL is not set. Please configure it in the options.');
+    debugLog('error', '[addTorrentFile] Rejected due to missing SERVER_URL:', error);
+
+    notify({
+      message: 'Please visit the options page to get started!'
+    }, -1, this._getNotificationId(), 'error');
+
+    return Promise.reject(error);
+  }
+
+  notify({
+    message: 'Adding torrent file' + (plugins?.Label ? ` with label: ${plugins.Label}` : '') + '...',
+    contextMessage: filename
+  }, 3000, this._getNotificationId(filename), 'request');
+
+  debugLog('log', '[addTorrentFile] Starting connection...');
+
+  return this._connect()
+    .then(() => {
+      debugLog('log', '[addTorrentFile] Connected, adding torrent file...');
+      return this._addTorrentFileViaData(filedata, filename, options);
+    })
+    .then((torrentId) => {
+      debugLog('log', '[addTorrentFile] Torrent file added successfully:', torrentId);
+
+      // Process plugins (like labels) if provided
+      if (plugins && Object.keys(plugins).length > 0) {
+        return this._processPluginOptions(filename, plugins, torrentId)
+          .then(() => {
+            notify({
+              message: 'Torrent file added successfully' + (plugins.Label ? ` with label: ${plugins.Label}` : ''),
+              contextMessage: filename
+            }, 5000, this._getNotificationId(filename), 'added');
+            return torrentId;
+          });
+      }
+
+      notify({
+        message: 'Torrent file added successfully',
+        contextMessage: filename
+      }, 5000, this._getNotificationId(filename), 'added');
+
+      return torrentId;
+    })
+    .catch(error => {
+      debugLog('error', '[addTorrentFile] Error:', error);
+      notify({
+        message: 'Error adding torrent file',
+        contextMessage: error.message || 'Unknown error'
+      }, 5000, this._getNotificationId(filename), 'error');
+      throw error;
+    });
+};
+
 DelugeConnection.prototype._addTorrentToCurrentServer = function(url, cookies, plugins, options) {
   if (!this.SERVER_URL) {
     const error = new Error('SERVER_URL is not set. Please configure it in the options.');
@@ -1130,6 +1200,50 @@ DelugeConnection.prototype._addTorrentViaUrl = function(url, params) {
         }
         
         // Success - return the torrent ID
+        return payload.result;
+    });
+};
+
+DelugeConnection.prototype._addTorrentFileViaData = function(filedata, filename, options) {
+    debugLog('log', '[_addTorrentFileViaData] Adding torrent file:', filename);
+
+    // Build parameter object with correct structure for Deluge
+    const params = options || {};
+
+    return this._request('core.add_torrent_file', {
+        method: 'core.add_torrent_file',
+        params: [filename, filedata, params],  // Deluge API takes filename, base64 data, and options
+        id: '-17004.' + Date.now()
+    })
+    .then(payload => {
+        debugLog('log', '[_addTorrentFileViaData] Add torrent file response:', payload);
+
+        if (!payload) {
+            throw new Error('Empty response from server');
+        }
+
+        if (payload.error) {
+            debugLog('error', '[_addTorrentFileViaData] Error from Deluge:', payload.error);
+
+            // Handle "already in session" error gracefully
+            if (payload.error.message && payload.error.message.includes('already in session')) {
+                debugLog('warn', '[_addTorrentFileViaData] Torrent already exists in Deluge');
+                // Extract the hash from the error message if possible
+                const hashMatch = payload.error.message.match(/\(([a-f0-9]{40})\)/i);
+                if (hashMatch) {
+                    return hashMatch[1];
+                }
+                throw new Error('Torrent already exists in Deluge');
+            }
+
+            throw new Error(payload.error.message || 'Failed to add torrent file');
+        }
+
+        if (payload.result === false) {
+            throw new Error('Server refused torrent file');
+        }
+
+        // Success - return the torrent ID (hash)
         return payload.result;
     });
 };
