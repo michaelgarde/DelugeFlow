@@ -60,11 +60,11 @@
     SITE_META = {
       DOMAIN: window.location.host,
       TORRENT_REGEX:
-      '^magnet:' 
-      + '|(\\/|^)(torrent|torrents)(?=.*action=download)'
-      + '|(\\/|^)(index|download)(\\.php)?(\\&|\\?|\\/)(?=.*torrent)'
-      // + '|\\/(torrent|download)(\\.php)?(\\/|\\?).+'
-      + '|\\.torrent', // eslint-disable-line no-useless-escape
+      '^magnet:'
+      + '|[?&]action=download'  // Must have action=download parameter
+      + '|/download\\.php.*torrent'  // download.php with torrent in query
+      + '|/torrents/download/'  // Common download path pattern
+      + '|\\.torrent($|\\?)', // eslint-disable-line no-useless-escape  // Must end with .torrent (with optional query string)
       TORRENT_URL_ATTRIBUTE: 'href',
       INSTALLED: false
     };

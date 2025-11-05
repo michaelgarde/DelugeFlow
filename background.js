@@ -127,20 +127,39 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+
+    // Check content type
+    const contentType = response.headers.get('content-type');
+    debugLog('debug', 'Response content-type:', contentType);
+
     return response.arrayBuffer();
   })
   .then(arrayBuffer => {
     debugLog('log', 'Torrent file fetched successfully, size:', arrayBuffer.byteLength);
 
-    // Convert to base64
+    // Validate that this looks like a torrent file
     const bytes = new Uint8Array(arrayBuffer);
+
+    // Torrent files are bencoded and must start with 'd' (dictionary)
+    if (bytes.length < 10) {
+      throw new Error('Downloaded file is too small to be a valid torrent');
+    }
+
+    const firstChar = String.fromCharCode(bytes[0]);
+    if (firstChar !== 'd') {
+      debugLog('error', 'File does not start with bencode dictionary marker. First bytes:',
+        Array.from(bytes.slice(0, 20)).map(b => String.fromCharCode(b)).join(''));
+      throw new Error('Downloaded file is not a valid torrent (invalid bencode format)');
+    }
+
+    // Convert to base64
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
     const base64 = btoa(binary);
 
-    debugLog('log', 'Torrent file encoded to base64, length:', base64.length);
+    debugLog('log', 'Torrent file validated and encoded to base64, length:', base64.length);
 
     // Send to Deluge using the global initialized connection
     const filename = downloadItem.filename || 'download.torrent';
