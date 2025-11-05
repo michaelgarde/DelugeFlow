@@ -247,24 +247,13 @@ DelugeConnection.prototype._addTorrentFileToCurrentServer = function(filedata, f
 };
 
 DelugeConnection.prototype._addTorrentToCurrentServer = function(url, cookies, plugins, options) {
-  if (!this.SERVER_URL) {
-    const error = new Error('SERVER_URL is not set. Please configure it in the options.');
-    debugLog('error', '[addTorrent] Rejected due to missing SERVER_URL:', error);
-    
-    notify({
-      message: 'Please visit the options page to get started!'
-    }, -1, this._getNotificationId(), 'error');
-
-    return Promise.reject(error);
-  }
-
   notify({
     message: 'Adding torrent' + (plugins?.Label ? ` with label: ${plugins.Label}` : '') + '...',
     contextMessage: url
   }, 3000, this._getNotificationId(url), 'request');
 
   debugLog('log', '[addTorrent] Starting connection...');
-  
+
   return this._connect()
     .then(() => {
       debugLog('log', '[addTorrent] Connected, adding torrent...');
@@ -355,9 +344,14 @@ DelugeConnection.prototype._connect = function(silent, isValidating = false) {
         CONNECTION_INFO: this.CONNECTION_INFO,
         isValidating: this._isValidating
       });
-      
+
       if (!this.SERVER_URL) {
-        return Promise.reject(new Error('Server URL not set after initialization'));
+        if (!silent) {
+          notify({
+            message: 'Please visit the options page to get started!'
+          }, -1, this._getNotificationId(), 'error');
+        }
+        return Promise.reject(new Error('SERVER_URL is not set. Please configure it in the options.'));
       }
       
       return this._doLogin(silent)
