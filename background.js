@@ -91,11 +91,11 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
     return;
   }
 
-  // Check if this is a torrent file
+  // Check if this is a torrent file based on MIME type or filename only
+  // Don't check URL patterns as they can be unreliable
   const isTorrentFile =
     downloadItem.mime === 'application/x-bittorrent' ||
-    downloadItem.filename?.endsWith('.torrent') ||
-    downloadItem.url?.endsWith('.torrent');
+    downloadItem.filename?.endsWith('.torrent');
 
   if (!isTorrentFile) {
     debugLog('debug', 'Not a torrent file, ignoring');
