@@ -167,7 +167,14 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
     // Send to Deluge using the global initialized connection
     const filename = downloadItem.filename || 'download.torrent';
 
-    delugeConnection.addTorrentFile(base64, filename)
+    // Ensure connection is initialized before adding torrent
+    const addTorrentPromise = delugeConnection.SERVER_URL
+      ? Promise.resolve()
+      : delugeConnection._initState()
+          .then(() => delugeConnection.connectToServer());
+
+    addTorrentPromise
+      .then(() => delugeConnection.addTorrentFile(base64, filename))
       .then(() => {
         debugLog('important', 'Torrent added to Deluge successfully:', filename);
 
@@ -181,6 +188,14 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
       })
       .catch(error => {
         debugLog('error', 'Failed to add torrent to Deluge:', error);
+
+        // Show error notification
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'images/icon-48.png',
+          title: 'DelugeFlow: Failed',
+          message: `Failed to add torrent: ${error.message}`
+        });
       });
   })
   .catch(error => {
