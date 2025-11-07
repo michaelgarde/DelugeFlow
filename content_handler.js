@@ -352,7 +352,7 @@
     }
 
     // Get the URL value
-    val = attr === 'href' ? element.href : element.getAttribute(attr);
+    const val = attr === 'href' ? element.href : element.getAttribute(attr);
     log('Found URL value:', val);
     
     if (val) {

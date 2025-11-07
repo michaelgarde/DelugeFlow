@@ -93,6 +93,9 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
 
   // Check if this is a torrent file based on MIME type or filename only
   // Don't check URL patterns as they can be unreliable
+  // Reason: Many private trackers and some sites serve .torrent files from URLs that do not end with '.torrent',
+  // and some use redirects or query parameters. Relying on URL patterns causes missed interceptions and false positives.
+  // Only use MIME type and filename for reliable detection.
   const isTorrentFile =
     downloadItem.mime === 'application/x-bittorrent' ||
     downloadItem.filename?.endsWith('.torrent');
