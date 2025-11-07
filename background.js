@@ -82,6 +82,84 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// Helper function to extract torrent name from bencode data
+function extractTorrentName(bytes) {
+  try {
+    // Convert bytes to string for parsing
+    let data = '';
+    for (let i = 0; i < bytes.length; i++) {
+      data += String.fromCharCode(bytes[i]);
+    }
+
+    // Find the "info" dictionary
+    const infoIndex = data.indexOf('4:info');
+    if (infoIndex === -1) {
+      return null;
+    }
+
+    // Start parsing after "4:info"
+    let pos = infoIndex + 6;
+
+    // Skip the dictionary marker 'd'
+    if (data[pos] === 'd') {
+      pos++;
+    }
+
+    // Look for "name" key within the info dictionary
+    // Try to find "4:name" or other length variants
+    let searchPos = pos;
+    let nameIndex = -1;
+
+    // Search for name field (could be "4:name" for single-file, or in files list for multi-file)
+    const namePattern = ':name';
+    for (let i = searchPos; i < Math.min(searchPos + 5000, data.length); i++) {
+      if (data.substr(i, 5) === namePattern) {
+        // Found ":name", now check if there's a digit before it
+        let lengthStart = i - 1;
+        while (lengthStart >= 0 && /\d/.test(data[lengthStart])) {
+          lengthStart--;
+        }
+        lengthStart++;
+
+        if (lengthStart < i) {
+          nameIndex = i + 5; // Position after ":name"
+          break;
+        }
+      }
+    }
+
+    if (nameIndex === -1) {
+      return null;
+    }
+
+    // Parse the string length
+    let lengthStr = '';
+    pos = nameIndex;
+    while (pos < data.length && /\d/.test(data[pos])) {
+      lengthStr += data[pos];
+      pos++;
+    }
+
+    if (data[pos] !== ':') {
+      return null;
+    }
+
+    const nameLength = parseInt(lengthStr, 10);
+    if (isNaN(nameLength) || nameLength <= 0 || nameLength > 1000) {
+      return null;
+    }
+
+    // Extract the name string
+    pos++; // Skip ':'
+    const name = data.substr(pos, nameLength);
+
+    return name || null;
+  } catch (e) {
+    debugLog('debug', 'Error parsing torrent name:', e);
+    return null;
+  }
+}
+
 // Download interception for .torrent files
 chrome.downloads.onCreated.addListener((downloadItem) => {
   debugLog('debug', 'Download detected:', downloadItem);
@@ -164,8 +242,12 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
 
     debugLog('log', 'Torrent file validated and encoded to base64, length:', base64.length);
 
-    // Send to Deluge using the global initialized connection
-    const filename = downloadItem.filename || 'download.torrent';
+    // Extract the actual torrent name from the file metadata
+    const extractedName = extractTorrentName(bytes);
+    const filename = extractedName || downloadItem.filename || 'download.torrent';
+
+    debugLog('log', 'Extracted torrent name:', extractedName);
+    debugLog('log', 'Using filename:', filename);
 
     // Ensure connection is initialized before adding torrent
     const addTorrentPromise = delugeConnection.SERVER_URL
