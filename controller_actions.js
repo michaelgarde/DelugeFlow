@@ -1219,15 +1219,12 @@ DelugeConnection.prototype._addTorrentFileViaData = function(filedata, filename,
         if (payload.error) {
             debugLog('error', '[_addTorrentFileViaData] Error from Deluge:', payload.error);
 
-            // Handle "already in session" error gracefully
+            // Handle "already in session" error
             if (payload.error.message && payload.error.message.includes('already in session')) {
                 debugLog('warn', '[_addTorrentFileViaData] Torrent already exists in Deluge');
-                // Extract the hash from the error message if possible
-                const hashMatch = payload.error.message.match(/\(([a-f0-9]{40})\)/i);
-                if (hashMatch) {
-                    return hashMatch[1];
-                }
-                throw new Error('Torrent already exists in Deluge');
+                const error = new Error('Torrent already added to Deluge');
+                error.code = 'ALREADY_EXISTS';
+                throw error;
             }
 
             throw new Error(payload.error.message || 'Failed to add torrent file');
@@ -1293,13 +1290,23 @@ function notify(opts, decay, id, icon_type) {
   const type = icon_type || 'info';
   const duration = decay || 3000;
 
-  // Send message to content script to show toast
-  communicator.sendMessage({
-    method: 'show-toast',
-    message: fullMessage,
-    type: type,
-    duration: duration
-  });
+  // Only try to send to content script if we have a valid port connection
+  // This prevents errors when called from background script context
+  try {
+    if (communicator && communicator._port) {
+      // Send message to content script to show toast
+      communicator.sendMessage({
+        method: 'show-toast',
+        message: fullMessage,
+        type: type,
+        duration: duration
+      });
+    } else {
+      debugLog('debug', 'Skipping notify (no content script port) - notifications handled by caller');
+    }
+  } catch (e) {
+    debugLog('debug', 'Failed to send notification to content script:', e.message);
+  }
 }
 
 /* BEGIN Setup */

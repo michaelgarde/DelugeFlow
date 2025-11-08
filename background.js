@@ -195,25 +195,43 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
     });
   });
 
-  // Fetch the torrent file content
-  debugLog('log', 'Fetching torrent file from:', downloadItem.url);
+  // Wait briefly to let the browser's canceled download clear, then fetch
+  debugLog('log', 'Waiting briefly before fetching torrent file from:', downloadItem.url);
 
-  fetch(downloadItem.url, {
+  setTimeout(() => {
+    debugLog('log', 'Fetching torrent file now');
+
+    // Helper function to fetch with retry
+  const fetchWithRetry = (url, options, retries = 3, delay = 1000) => {
+    return fetch(url, options)
+      .then(response => {
+        // Handle rate limiting (429) with retry
+        if (response.status === 429 && retries > 0) {
+          debugLog('warn', `Rate limited (429), retrying in ${delay}ms... (${retries} retries left)`);
+          return new Promise(resolve => {
+            setTimeout(() => {
+              resolve(fetchWithRetry(url, options, retries - 1, delay * 2));
+            }, delay);
+          });
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Check content type
+        const contentType = response.headers.get('content-type');
+        debugLog('debug', 'Response content-type:', contentType);
+
+        return response.arrayBuffer();
+      });
+  };
+
+  fetchWithRetry(downloadItem.url, {
     credentials: 'include',
     headers: {
       'Accept': 'application/x-bittorrent'
     }
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    // Check content type
-    const contentType = response.headers.get('content-type');
-    debugLog('debug', 'Response content-type:', contentType);
-
-    return response.arrayBuffer();
   })
   .then(arrayBuffer => {
     debugLog('log', 'Torrent file fetched successfully, size:', arrayBuffer.byteLength);
@@ -299,4 +317,5 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
       message: `Failed to intercept torrent: ${error.message}`
     });
   });
+  }, 500); // Wait 500ms before fetching to avoid rate limiting
 });
