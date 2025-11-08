@@ -37,7 +37,9 @@
       { id: 'send_cookies', def: true },
       { id: 'intercept_torrent_downloads', def: true },
       { id: 'link_regex', def: '' },
-      { id: 'enable_debug_logging', def: false }
+      { id: 'enable_debug_logging', def: false },
+      { id: 'popup_width', def: 480 },
+      { id: 'popup_height', def: 450 }
     ],
     LABEL_DEFAULTS: [
       { id: 'default_label', def: '' }

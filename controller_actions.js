@@ -1733,7 +1733,7 @@ communicator
           return delugeConnection._request('web.update_ui', {
             method: 'web.update_ui',
             params: [
-              ['name', 'progress', 'state', 'download_payload_rate', 'upload_payload_rate', 'eta'],
+              ['name', 'progress', 'state', 'download_payload_rate', 'upload_payload_rate', 'eta', 'time_added'],
               {}
             ],
             id: '-17100'
@@ -1750,7 +1750,8 @@ communicator
               state: data.state || 'Unknown',
               download_speed: data.download_payload_rate || 0,
               upload_speed: data.upload_payload_rate || 0,
-              eta: data.eta || -1
+              eta: data.eta || -1,
+              time_added: data.time_added || 0
             }));
             
             sendResponse({ value: torrents });

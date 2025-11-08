@@ -51,6 +51,26 @@
           Enable single-click torrent capture
         </label>
       </div>
+      <div class="opts">
+        <label title="Automatically intercept .torrent file downloads and send them directly to Deluge instead of downloading to your computer">
+          <input type="checkbox" id="intercept_torrent_downloads" class="option_field"/>
+          Automatically send .torrent downloads to Deluge
+        </label>
+      </div>
+      <div class="opts">
+        <label title="Set the width of the popup window (320-800 pixels)">
+          Popup Width:
+          <input type="number" id="popup_width" min="320" max="800" step="20" class="option_field" style="width: 80px; margin-left: 10px;"/>
+          px
+        </label>
+      </div>
+      <div class="opts">
+        <label title="Set the height of the torrent list area (300-800 pixels)">
+          Popup Height:
+          <input type="number" id="popup_height" min="300" max="800" step="20" class="option_field" style="width: 80px; margin-left: 10px;"/>
+          px
+        </label>
+      </div>
     </div>
   </div>
 
@@ -64,12 +84,6 @@
         <label title="Send browser cookies to the Deluge server when adding torrents - useful for private trackers that require authentication">
           <input type="checkbox" id="send_cookies" class="option_field"/>
           Forward browser cookies to Deluge server
-        </label>
-      </div>
-      <div class="opts">
-        <label title="Automatically intercept .torrent file downloads and send them directly to Deluge instead of downloading to your computer">
-          <input type="checkbox" id="intercept_torrent_downloads" class="option_field"/>
-          Automatically send .torrent downloads to Deluge
         </label>
       </div>
       <div class="opts">
