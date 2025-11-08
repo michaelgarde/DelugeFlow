@@ -5,7 +5,7 @@ var gulp = require( 'gulp' ),
   copy = require( 'gulp-copy' ),
   notify = require( 'gulp-notify' ),
   uglifycss = require( 'gulp-uglifycss' ),
-  uglify = require( 'gulp-uglify' ),
+  terser = require( 'gulp-terser' ),
   fs = require( 'fs' ),
   plumber = require( 'gulp-plumber' ),
   sourcemaps = require( 'gulp-sourcemaps' ),
@@ -48,8 +48,7 @@ function buildJS ( src, destFile ) {
       } )
     } ) )
     .pipe( sourcemaps.init() )
-    // Skip uglify for ES6+ compatibility - just concatenate
-    // .pipe( uglify() )
+    .pipe( terser() )
     .pipe( plumber.stop() )
     .pipe( concat( destFile ) )
     .pipe( sourcemaps.write( 'maps' ) )
