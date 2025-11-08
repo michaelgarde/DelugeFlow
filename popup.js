@@ -11,10 +11,45 @@
   let activeServerIndex = 0;
   let servers = [];
   let refreshTimers = {};
-  
+
   // Refresh interval in milliseconds
   const REFRESH_INTERVAL = 3000;
   const MAX_VISIBLE_SERVERS = 3;
+
+  // Size management
+  const MIN_WIDTH = 320;
+  const MAX_WIDTH = 800;
+  const MIN_HEIGHT = 300;
+  const MAX_HEIGHT = 800;
+
+  // Load and apply saved popup size
+  function loadPopupSize() {
+    chrome.storage.local.get(['popup_width', 'popup_height'], (data) => {
+      const width = data.popup_width || 480;
+      const height = data.popup_height || 450;
+      applyPopupSize(width, height);
+    });
+  }
+
+  function applyPopupSize(width, height) {
+    const container = document.querySelector('body > div');
+
+    if (container) {
+      container.style.width = `${Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, width))}px`;
+    }
+
+    // Update the dynamic style for torrents-container max-height
+    const dynamicStyle = document.getElementById('dynamic-size-style');
+    if (dynamicStyle) {
+      dynamicStyle.textContent = `.torrents-container { max-height: ${Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, height))}px; }`;
+    }
+  }
+
+  // Create dynamic style element for size adjustments
+  const dynamicSizeStyle = document.createElement('style');
+  dynamicSizeStyle.id = 'dynamic-size-style';
+  dynamicSizeStyle.textContent = `.torrents-container { max-height: 450px; }`;
+  document.head.appendChild(dynamicSizeStyle);
 
   // Create styles for torrent display
   const style = document.createElement('style');
@@ -27,7 +62,6 @@
     }
     .torrents-container {
       margin-top: 10px;
-      max-height: 300px;
       overflow-y: auto;
       border-top: 1px solid #ddd;
       padding-top: 10px;
@@ -197,18 +231,13 @@
       return;
     }
     
-    // Sort torrents: downloading first, then by progress
+    // Sort torrents by date added (newest first)
     torrents.sort((a, b) => {
-      if (a.state === 'Downloading' && b.state !== 'Downloading') return -1;
-      if (a.state !== 'Downloading' && b.state === 'Downloading') return 1;
-      return b.progress - a.progress;
+      return (b.time_added || 0) - (a.time_added || 0);
     });
     
-    // Limit to top 5 torrents
-    const topTorrents = torrents.slice(0, 5);
-    
     // Create HTML for each torrent
-    const html = topTorrents.map(torrent => {
+    const html = torrents.map(torrent => {
       const progress = Math.round(torrent.progress * 100);
       const speedDown = formatSpeed(torrent.download_speed);
       const speedUp = formatSpeed(torrent.upload_speed);
@@ -229,8 +258,8 @@
       `;
     }).join('');
     
-    container.innerHTML = html + 
-      `<div class="no-torrents">Showing ${topTorrents.length} of ${torrents.length} torrents</div>`;
+    container.innerHTML = html +
+      (torrents.length > 0 ? `<div class="no-torrents">Showing ${torrents.length} torrent${torrents.length !== 1 ? 's' : ''}</div>` : '');
   }
   
   // Helper functions for formatting
@@ -262,6 +291,9 @@
     if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
     return `${remainingSeconds}s`;
   }
+
+  // Load saved size on popup open
+  loadPopupSize();
 
   // Initialize communication and get server info
   communicator.observeConnect(() => {

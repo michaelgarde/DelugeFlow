@@ -60,11 +60,7 @@
     SITE_META = {
       DOMAIN: window.location.host,
       TORRENT_REGEX:
-      '^magnet:' 
-      + '|(\\/|^)(torrent|torrents)(?=.*action=download)'
-      + '|(\\/|^)(index|download)(\\.php)?(\\&|\\?|\\/)(?=.*torrent)'
-      // + '|\\/(torrent|download)(\\.php)?(\\/|\\?).+'
-      + '|\\.torrent', // eslint-disable-line no-useless-escape
+      '^magnet:',  // Only match magnet links explicitly - torrent downloads are handled by background.js
       TORRENT_URL_ATTRIBUTE: 'href',
       INSTALLED: false
     };
@@ -356,7 +352,7 @@
     }
 
     // Get the URL value
-    val = attr === 'href' ? element.href : element.getAttribute(attr);
+    const val = attr === 'href' ? element.href : element.getAttribute(attr);
     log('Found URL value:', val);
     
     if (val) {
@@ -474,6 +470,10 @@
                 } else {
                     showToast(`Error adding torrent: ${response.error}`, 'error', 5000);
                 }
+            } else {
+                // Show success notification
+                log('Torrent added successfully');
+                showToast('Torrent added to Deluge', 'success', 3000);
             }
         });
     }
@@ -982,13 +982,9 @@
     // Initialize the modal container
     modal_init();
     
-    // Set default regex if none provided
-    // https://passthepopcorn.me/torrents.php?action=download&id=671675&authkey=c058131650a963d2d3813042121794c4&torrent_pass=mjc7q3wiw7i2ij5iyd31ctfleyd74a4x
-    const defaultRegex = '^magnet:'
-      + '|(\\/|^)(torrent|torrents|dl|download|get)(\\.php)?\\?(.*&)?action=download'  // Matches PTP style with action=download
-      + '|(\\/|^)(torrent|torrents|dl|download|get)(\\.php)?\\/(\\d+|[a-f0-9]{32})'   // Matches numeric IDs or hashes
-      + '|(\\/|^)(index|download)(\\.php)?(\\?|\\/).*\\.torrent'                       // Matches .torrent in query/path
-      + '|\\.torrent(\\?.*)?$';                                                        // Matches .torrent files
+    // Set default regex - only match magnet links explicitly
+    // Torrent file downloads are handled by chrome.downloads API in background.js
+    const defaultRegex = '^magnet:';
     
     // Get regex for link checking from settings
     safeSendMessage({
