@@ -44,11 +44,12 @@ function buildJS ( src, destFile ) {
   return gulp.src( src )
     .pipe( plumber( {
       errorHandler: notify.onError( function ( error ) {
-        return error.name + ': ' + error.message + '\n' + error.cause.filename + '[' + error.cause.line + ':' + error.cause.col + '] ' + error.cause.message;
+        return error.name + ': ' + error.message + '\n' + (error.cause ? error.cause.filename + '[' + error.cause.line + ':' + error.cause.col + '] ' + error.cause.message : '');
       } )
     } ) )
     .pipe( sourcemaps.init() )
-    .pipe( uglify() )
+    // Skip uglify for ES6+ compatibility - just concatenate
+    // .pipe( uglify() )
     .pipe( plumber.stop() )
     .pipe( concat( destFile ) )
     .pipe( sourcemaps.write( 'maps' ) )
@@ -72,6 +73,11 @@ function copyProjectFiles ( ) {
   }
   fs.writeFileSync( './build/manifest.json', JSON.stringify( manifest, null, 2 ) );
 
+  // Create lib/images if it doesn't exist
+  if ( !fs.existsSync( './lib/images' ) ) {
+    fs.mkdirSync( './lib/images', { recursive: true } );
+  }
+
   return gulp.src( [
     'README.md',
     './images/**/*',
@@ -79,7 +85,7 @@ function copyProjectFiles ( ) {
     'options.html',
     'popup.html',
     './lib/images/**/*'
-  ] )
+  ], { allowEmpty: true } )
     .pipe( copy( './build/' ) )
     .pipe( gulp.dest( './' ) )
     .pipe( notify( {
@@ -89,16 +95,19 @@ function copyProjectFiles ( ) {
     } ) );
 }
 
-function package () {
+function createDistributionZip () {
 
-  return gulp.src( 'build/**/*' )
-    .pipe( zip( 'DelugeFlow-' + require( './build/manifest.json' ).version + '.zip' ) )
-    .pipe( gulp.dest( 'dist' ) )
-    .pipe( notify( {
-      title: 'Gulp',
-      message: 'Packaged...',
-      onLast: true
-    } ) );
+    const version = require( './build/manifest.json' ).version;
+    const zipFileName = `DelugeFlow-${version}.zip`;
+
+    return gulp.src( 'build/**/*' )
+        .pipe( zip( zipFileName ) )
+        .pipe( gulp.dest( 'dist' ) )
+        .pipe( notify( {
+            title: 'Gulp',
+            message: 'Packaged...',
+            onLast: true
+        } ) );
 
 }
 
@@ -151,10 +160,10 @@ const build = gulp.series( gulp.parallel( buildContentCSS, buildContentJS, build
 gulp.task('watch', watch);
 gulp.task('build', build);
 gulp.task('default', build);
-gulp.task('package', package);
+gulp.task('package', createDistributionZip);
 
 // Also keep exports for Gulp 4 CLI
 exports.watch = watch;
 exports.build = build;
 exports.default = build;
-exports.package = package;
+exports.package = createDistributionZip;
