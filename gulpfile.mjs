@@ -1,32 +1,41 @@
 /* jshint node:true */
 
-var gulp = require( 'gulp' ),
-  path = require( 'path' ),
-  copy = require( 'gulp-copy' ),
-  notify = require( 'gulp-notify' ),
-  uglifycss = require( 'gulp-uglifycss' ),
-  terser = require( 'gulp-terser' ),
-  fs = require( 'fs' ),
-  plumber = require( 'gulp-plumber' ),
-  sourcemaps = require( 'gulp-sourcemaps' ),
-  zip = require( 'gulp-zip' ),
-  concat = require( 'gulp-concat' );
+import gulp from 'gulp';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import copy from 'gulp-copy';
+import notify from 'gulp-notify';
+import uglifycss from 'gulp-uglifycss';
+import terser from 'gulp-terser';
+import fs from 'fs';
+import plumber from 'gulp-plumber';
+import sourcemaps from 'gulp-sourcemaps';
+import zip from 'gulp-zip';
+import concat from 'gulp-concat';
 
-var manifest = require( './manifest.json' ),
-  popupJS = [
-    'lib/controller_communicator.js',
-    'lib/utils.js',
-    'popup.js'
-  ],
-  optionsCSS = [ 'chrome-bootstrap.css', 'options.css' ],
-  optionsJS = [
-    'lib/jsrender.min.js',
-    'lib/utils.js',
-    'lib/controller_communicator.js',
-    'options.js'
-  ],
-  contentJS = manifest.content_scripts[0].js,
-  contentCSS = manifest.content_scripts[0].css;
+// ES modules don't have __dirname, so we need to create it
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Import JSON files
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const manifest = require('./manifest.json');
+
+const popupJS = [
+  'lib/controller_communicator.js',
+  'lib/utils.js',
+  'popup.js'
+];
+const optionsCSS = [ 'chrome-bootstrap.css', 'options.css' ];
+const optionsJS = [
+  'lib/jsrender.min.js',
+  'lib/utils.js',
+  'lib/controller_communicator.js',
+  'options.js'
+];
+const contentJS = manifest.content_scripts[0].js;
+const contentCSS = manifest.content_scripts[0].css;
 
 function buildCSS( src, destFile ) {
   return gulp.src( src )
@@ -61,8 +70,9 @@ function buildJS ( src, destFile ) {
 }
 
 function copyProjectFiles ( ) {
+  // Reload manifest.json
   delete require.cache[ path.resolve( './manifest.json' ) ];
-  var manifest = require( './manifest.json' );
+  const manifest = require( './manifest.json' );
   manifest.content_scripts[ 0 ].css = [ 'content.min.css' ];
   manifest.content_scripts[ 0 ].js = [ 'content.min.js' ];
   manifest.background.service_worker = 'background.min.js';
@@ -95,19 +105,17 @@ function copyProjectFiles ( ) {
 }
 
 function createDistributionZip () {
+  const version = require( './build/manifest.json' ).version;
+  const zipFileName = `DelugeFlow-${version}.zip`;
 
-    const version = require( './build/manifest.json' ).version;
-    const zipFileName = `DelugeFlow-${version}.zip`;
-
-    return gulp.src( 'build/**/*' )
-        .pipe( zip( zipFileName ) )
-        .pipe( gulp.dest( 'dist' ) )
-        .pipe( notify( {
-            title: 'Gulp',
-            message: 'Packaged...',
-            onLast: true
-        } ) );
-
+  return gulp.src( 'build/**/*' )
+    .pipe( zip( zipFileName ) )
+    .pipe( gulp.dest( 'dist' ) )
+    .pipe( notify( {
+      title: 'Gulp',
+      message: 'Packaged...',
+      onLast: true
+    } ) );
 }
 
 function buildContentCSS () {
@@ -135,21 +143,13 @@ function buildPopupJS () {
 }
 
 function watch () {
-
   gulp.watch( contentCSS, buildContentCSS );
-
   gulp.watch( contentJS, buildContentJS );
-
   gulp.watch( optionsJS, buildOptionsJS );
-
   gulp.watch( optionsCSS, buildOptionsCSS );
-
   gulp.watch( ['background.js'], buildBackgroundJS );
-
   gulp.watch( popupJS, buildPopupJS );
-
   gulp.watch( [ '*.json', '*.html', '_locales/**/*', 'images/**/*', 'lib/images/**/*' ], copyProjectFiles );
-
 }
 
 /* task exports */
@@ -162,7 +162,5 @@ gulp.task('default', build);
 gulp.task('package', createDistributionZip);
 
 // Also keep exports for Gulp 4 CLI
-exports.watch = watch;
-exports.build = build;
-exports.default = build;
-exports.package = createDistributionZip;
+export { watch, build, createDistributionZip as package };
+export default build;
