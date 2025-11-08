@@ -1342,6 +1342,29 @@ function createContextMenu(add, with_options) {
     });
 }
 
+// Helper function to get cookies for a URL (for use in background script)
+function getCookiesForUrl(url) {
+  return new Promise((resolve) => {
+    chrome.cookies.getAll({ url: url }, (cookies) => {
+      if (chrome.runtime.lastError) {
+        debugLog('error', 'Error getting cookies:', chrome.runtime.lastError);
+        resolve({});
+        return;
+      }
+
+      // Convert cookies array to object
+      const cookieMap = {};
+      if (cookies && cookies.length > 0) {
+        cookies.forEach(cookie => {
+          cookieMap[cookie.name] = cookie.value;
+        });
+      }
+
+      resolve(cookieMap);
+    });
+  });
+}
+
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   debugLog('log', '[contextMenus.onClicked] Context menu clicked:', {
@@ -1363,7 +1386,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     torrentUrl.includes('download.php') ||
     torrentUrl.includes('dl.php') ||
     torrentUrl.includes('get.php') ||
-    torrentUrl.includes('action=download');
+    torrentUrl.includes('action=download') ||
+    torrentUrl.includes('/download/') ||
+    torrentUrl.includes('/torrents/download/');
 
   if (!isTorrentLink) {
     debugLog('log', '[contextMenus.onClicked] Not a torrent/magnet link, ignoring:', torrentUrl);
@@ -1386,23 +1411,66 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       if (chrome.runtime.lastError) {
         debugLog('error', 'Error sending message to content script:', chrome.runtime.lastError);
         // Fallback: try to add directly if content script fails
-        communicator.sendMessage({
-          method: 'getCookies',
-          url: torrentUrl
-        }, (response) => {
-          const cookies = response?.cookies || {};
-          delugeConnection.addTorrent(torrentUrl, cookies);
+        getCookiesForUrl(torrentUrl).then(cookies => {
+          delugeConnection.addTorrent(torrentUrl, cookies)
+            .then(() => {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'images/icon-48.png',
+                title: 'DelugeFlow: Torrent Added',
+                message: 'Torrent added to Deluge successfully'
+              });
+            })
+            .catch(error => {
+              // Parse and simplify error message
+              let errorMessage = error.message || 'Unknown error';
+
+              // Check for "already in session" error
+              if (errorMessage.includes('already in session') || errorMessage.includes('AddTorrentError')) {
+                errorMessage = 'Torrent already added to Deluge';
+              }
+
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'images/icon-48.png',
+                title: 'DelugeFlow: Error',
+                message: errorMessage
+              });
+            });
         });
       }
     });
   } else if (info.menuItemId === 'add') {
     // Get cookies and add torrent directly
-    communicator.sendMessage({
-      method: 'getCookies',
-      url: torrentUrl
-    }, (response) => {
-      const cookies = response?.cookies || {};
-      delugeConnection.addTorrent(torrentUrl, cookies);
+    getCookiesForUrl(torrentUrl).then(cookies => {
+      delugeConnection.addTorrent(torrentUrl, cookies)
+        .then(() => {
+          debugLog('important', 'Torrent added successfully via context menu');
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'images/icon-48.png',
+            title: 'DelugeFlow: Torrent Added',
+            message: 'Torrent added to Deluge successfully'
+          });
+        })
+        .catch(error => {
+          debugLog('error', 'Failed to add torrent via context menu:', error);
+
+          // Parse and simplify error message
+          let errorMessage = error.message || 'Unknown error';
+
+          // Check for "already in session" error
+          if (errorMessage.includes('already in session') || errorMessage.includes('AddTorrentError')) {
+            errorMessage = 'Torrent already added to Deluge';
+          }
+
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'images/icon-48.png',
+            title: 'DelugeFlow: Error',
+            message: errorMessage
+          });
+        });
     });
   }
 });
@@ -1706,14 +1774,15 @@ communicator
 
       if (addtype === 'todeluge') {
         debugLog('log', '<<<< ADDLINK >>>>', url, domain, plugins, options);
-        // Get cookies before adding torrent
-        communicator.sendMessage({
-          method: 'getCookies',
-          url: url
-        }, (response) => {
-          const cookies = response?.cookies || {};
-          delugeConnection.addTorrent(url, cookies, plugins, options);
-        });
+        // Use cookies from request if provided, otherwise fetch them
+        if (request.cookies) {
+          delugeConnection.addTorrent(url, request.cookies, plugins, options);
+        } else {
+          // Fallback: get cookies if not provided in request
+          getCookiesForUrl(url).then(cookies => {
+            delugeConnection.addTorrent(url, cookies, plugins, options);
+          });
+        }
       } else if (addtype === 'todeluge:withoptions') {
         debugLog('log', 'Processing addlink-todeluge:withoptions request');
         // First get plugin info and server config

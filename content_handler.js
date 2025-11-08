@@ -470,6 +470,10 @@
                 } else {
                     showToast(`Error adding torrent: ${response.error}`, 'error', 5000);
                 }
+            } else {
+                // Show success notification
+                log('Torrent added successfully');
+                showToast('Torrent added to Deluge', 'success', 3000);
             }
         });
     }

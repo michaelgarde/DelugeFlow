@@ -271,12 +271,20 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
       .catch(error => {
         debugLog('error', 'Failed to add torrent to Deluge:', error);
 
+        // Parse and simplify error message
+        let errorMessage = error.message || 'Unknown error';
+
+        // Check for "already in session" error
+        if (errorMessage.includes('already in session') || errorMessage.includes('AddTorrentError')) {
+          errorMessage = 'Torrent already added to Deluge';
+        }
+
         // Show error notification
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'images/icon-48.png',
           title: 'DelugeFlow: Failed',
-          message: `Failed to add torrent: ${error.message}`
+          message: errorMessage
         });
       });
   })
