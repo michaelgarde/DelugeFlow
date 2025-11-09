@@ -172,6 +172,7 @@ export const DELUGE_METHODS = {
   WEB_CONNECTED: 'web.connected',
   WEB_GET_HOSTS: 'web.get_hosts',
   WEB_GET_HOST_STATUS: 'web.get_host_status',
+  WEB_START_DAEMON: 'web.start_daemon',
   WEB_CONNECT: 'web.connect',
   WEB_UPDATE_UI: 'web.update_ui',
   WEB_GET_PLUGINS: 'web.get_plugins',

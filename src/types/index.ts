@@ -167,6 +167,7 @@ export interface StorageData {
   popup_width?: number;
   popup_height?: number;
   inpage_notification?: boolean;
+  default_label?: string;
   server_default_labels?: Record<string, string>;
   accordion_states?: Record<string, boolean>;
 }
