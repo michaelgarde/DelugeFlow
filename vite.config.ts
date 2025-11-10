@@ -1,10 +1,15 @@
 import { defineConfig } from 'vite';
-import { crx } from '@crxjs/vite-plugin';
 import path from 'path';
 
-// Note: manifest.json will be updated to use the new structure
-// For now, this is a preparation for future Vite builds
-
+/**
+ * Vite configuration for DelugeFlow Chrome Extension
+ *
+ * Builds TypeScript modules for:
+ * - Background service worker
+ * - Content script
+ * - Popup page
+ * - Options page
+ */
 export default defineConfig({
   resolve: {
     alias: {
@@ -14,28 +19,33 @@ export default defineConfig({
       '@content': path.resolve(__dirname, './src/content'),
       '@config': path.resolve(__dirname, './src/config'),
       '@types': path.resolve(__dirname, './src/types'),
+      '@background': path.resolve(__dirname, './src/background'),
+      '@popup': path.resolve(__dirname, './src/popup'),
+      '@options': path.resolve(__dirname, './src/options'),
     },
   },
   build: {
-    outDir: 'build-vite',
+    outDir: 'build-ts',
     sourcemap: true,
+    minify: false, // Keep readable for debugging
     rollupOptions: {
       input: {
-        // These will be created/migrated in future steps
-        // background: 'src/background.ts',
-        // content: 'src/content/ContentHandler.ts',
-        // popup: 'src/popup.ts',
-        // options: 'src/options.ts',
+        background: path.resolve(__dirname, 'src/background/background.ts'),
+        content: path.resolve(__dirname, 'src/content/ContentHandler.ts'),
+        popup: path.resolve(__dirname, 'src/popup/popup.ts'),
+        options: path.resolve(__dirname, 'src/options/options.ts'),
       },
       output: {
         entryFileNames: '[name].js',
-        chunkFileNames: '[name].js',
-        assetFileNames: '[name].[ext]',
+        chunkFileNames: 'chunks/[name].js',
+        assetFileNames: 'assets/[name].[ext]',
+        format: 'es', // ES modules (supported by Manifest V3)
       },
+      external: ['chrome'], // Chrome APIs are provided by the browser
     },
   },
-  plugins: [
-    // CRX plugin will be enabled once manifest is updated
-    // crx({ manifest: './manifest.json' }),
-  ],
+  define: {
+    // Define environment variables if needed
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+  },
 });

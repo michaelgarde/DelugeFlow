@@ -1,6 +1,6 @@
 {
   "name": "DelugeFlow",
-  "version": "0.80.0",
+  "version": "0.90.0",
   "description": "Chrome extension for sending torrent links to Deluge servers",
   "type": "module",
   "repository": {
@@ -15,10 +15,13 @@
   "homepage": "https://github.com/d8ahazard/DelugeFlow",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run type-check && vite build",
+    "build:ts": "vite build",
     "build:gulp": "gulp build",
+    "build:all": "npm run build:ts && npm run build:gulp",
     "watch": "gulp watch",
-    "package": "npm run build && gulp package",
+    "watch:ts": "tsc --watch --noEmit",
+    "package": "npm run build:gulp && gulp package",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx"
   },
