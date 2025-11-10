@@ -14,14 +14,9 @@
   },
   "homepage": "https://github.com/d8ahazard/DelugeFlow",
   "scripts": {
-    "dev": "vite",
     "build": "npm run type-check && vite build",
-    "build:ts": "vite build",
-    "build:gulp": "gulp build",
-    "build:all": "npm run build:ts && npm run build:gulp",
-    "watch": "gulp watch",
-    "watch:ts": "tsc --watch --noEmit",
-    "package": "npm run build:gulp && gulp package",
+    "watch": "tsc --watch --noEmit",
+    "package": "npm run build && node scripts/package.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx"
   },
@@ -31,21 +26,12 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.0.0-beta.25",
     "@types/bencode": "^2.0.4",
     "@types/chrome": "^0.0.268",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "archiver": "^7.0.1",
     "eslint": "^8.57.0",
-    "gulp": "^5.0.1",
-    "gulp-concat": "^2.6.1",
-    "gulp-copy": "^5.0.0",
-    "gulp-notify": "^5.0.0",
-    "gulp-plumber": "^1.1.0",
-    "gulp-sourcemaps": "^2.6.4",
-    "gulp-terser": "^2.1.0",
-    "gulp-uglifycss": "^1.0.6",
-    "gulp-zip": "^6.1.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.2"
   }

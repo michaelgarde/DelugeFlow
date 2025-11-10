@@ -5,7 +5,8 @@ Thumbs.db
 node_modules/
 dist/
 build/
+build-ts/
+releases/
 .idea/
 .claude
 .github
-build-ts/

@@ -40,14 +40,14 @@
       "lib/logger.js",
       "lib/utils.js",
       "lib/controller_communicator.js",
-      "build-ts/content.js"
+      "content.js"
     ],
     "css": [
       "content_handler.css"
     ]
   }],
   "background": {
-    "service_worker": "build-ts/background.js",
+    "service_worker": "background.js",
     "type": "module"
   },
   "web_accessible_resources": [
@@ -57,7 +57,7 @@
         "images/*.gif",
         "lib/images/*.png",
         "options.css",
-        "build-ts/options.js",
+        "options.js",
         "lib/logger.js"
       ],
       "matches": ["<all_urls>"]

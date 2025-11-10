@@ -25,36 +25,34 @@ Intercepts torrent links and magnet URLs in your browser and sends them directly
 npm install
 ```
 
-### Development Build
+### Build
 
 ```bash
-# Build TypeScript modules
-npm run build:ts
+# Build extension (output: dist/)
+npm run build
 
-# Watch for changes
-npm run watch:ts
+# Watch for type errors while coding
+npm run watch
 
-# Type checking
+# Type check only
 npm run type-check
 ```
 
 ### Install in Chrome
 
-1. Build the extension: `npm run build:ts`
+1. Build the extension: `npm run build`
 2. Open Chrome: `chrome://extensions/`
 3. Enable "Developer mode"
 4. Click "Load unpacked"
-5. Select the DelugeFlow directory
+5. Select the **dist/** directory
 
-### Production Build
+### Package for Distribution
 
 ```bash
-# Build and package for distribution
-npm run build:all
 npm run package
 ```
 
-Output: `dist/DelugeFlow-{version}.zip`
+Output: `releases/DelugeFlow-{version}.zip`
 
 ## Configuration
 

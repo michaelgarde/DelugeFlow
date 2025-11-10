@@ -1,14 +1,11 @@
 import { defineConfig } from 'vite';
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Vite configuration for DelugeFlow Chrome Extension
  *
- * Builds TypeScript modules for:
- * - Background service worker
- * - Content script
- * - Popup page
- * - Options page
+ * Builds TypeScript modules and prepares the complete extension package
  */
 export default defineConfig({
   resolve: {
@@ -25,9 +22,10 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'build-ts',
+    outDir: 'dist',
+    emptyOutDir: true,
     sourcemap: true,
-    minify: false, // Keep readable for debugging
+    minify: false, // Set to 'terser' for production
     rollupOptions: {
       input: {
         background: path.resolve(__dirname, 'src/background/background.ts'),
@@ -45,7 +43,50 @@ export default defineConfig({
     },
   },
   define: {
-    // Define environment variables if needed
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
   },
+  plugins: [
+    // Plugin to copy static files after build
+    {
+      name: 'copy-static-files',
+      closeBundle() {
+        const distDir = path.resolve(__dirname, 'dist');
+
+        // Copy static files
+        const filesToCopy = [
+          { src: 'manifest.json', dest: 'manifest.json' },
+          { src: 'popup.html', dest: 'popup.html' },
+          { src: 'options.html', dest: 'options.html' },
+          { src: 'content_handler.css', dest: 'content_handler.css' },
+          { src: 'options.css', dest: 'options.css' },
+          { src: 'chrome-bootstrap.css', dest: 'chrome-bootstrap.css' },
+        ];
+
+        filesToCopy.forEach(({ src, dest }) => {
+          const srcPath = path.resolve(__dirname, src);
+          const destPath = path.resolve(distDir, dest);
+          if (fs.existsSync(srcPath)) {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        });
+
+        // Copy directories
+        const dirsToCopy = [
+          { src: 'images', dest: 'images' },
+          { src: '_locales', dest: '_locales' },
+          { src: 'lib', dest: 'lib' },
+        ];
+
+        dirsToCopy.forEach(({ src, dest }) => {
+          const srcPath = path.resolve(__dirname, src);
+          const destPath = path.resolve(distDir, dest);
+          if (fs.existsSync(srcPath)) {
+            fs.cpSync(srcPath, destPath, { recursive: true });
+          }
+        });
+
+        console.log('✓ Static files copied to dist/');
+      },
+    },
+  ],
 });
