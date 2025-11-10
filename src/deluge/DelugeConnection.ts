@@ -242,6 +242,74 @@ export class DelugeConnection {
   }
 
   /**
+   * Validate server and get plugin info with arbitrary credentials
+   * Used by options page to test new server connections
+   */
+  async validateServerAndGetPlugins(url: string, password: string): Promise<PluginInfo> {
+    logger.debug('Validating server:', this.sanitizeUrl(url));
+
+    // Create temporary modules for validation
+    const auth = new DelugeAuth(null as any, password);
+    const request = new DelugeRequest(url, auth);
+    auth.setRequestHandler(request);
+    auth.setValidating(true);
+
+    const daemon = new DelugeDaemon(request);
+    const plugins = new DelugePlugins(request);
+
+    try {
+      // Perform connection sequence
+      await auth.login(true); // Silent login
+      await daemon.connectToDaemon();
+      const pluginInfo = await plugins.getPluginInfo();
+
+      logger.debug('Server validation successful');
+      return pluginInfo;
+    } catch (error) {
+      logger.error('Server validation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get torrent list for a specific server
+   */
+  async getTorrentList(serverIndex?: number): Promise<any[]> {
+    // Connect to specified server if provided
+    if (serverIndex !== undefined) {
+      await this.connectToServer(serverIndex);
+    }
+
+    if (!this.request) {
+      throw new ServerConfigError('Not connected to server');
+    }
+
+    try {
+      const response = await this.request.request<any>('web.update_ui', [
+        ['name', 'state', 'progress', 'eta', 'download_payload_rate', 'upload_payload_rate', 'time_added'],
+        {}
+      ]);
+
+      // Convert the response format to array
+      const torrents: any[] = [];
+      const result = response.result || response;
+      if (result && result.torrents) {
+        for (const [hash, data] of Object.entries(result.torrents)) {
+          torrents.push({
+            hash,
+            ...(data as object),
+          });
+        }
+      }
+
+      return torrents;
+    } catch (error) {
+      logger.error('Failed to get torrent list:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Sanitize URL for logging (remove credentials)
    */
   private sanitizeUrl(url: string): string {

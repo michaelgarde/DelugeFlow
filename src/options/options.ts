@@ -1,14 +1,10 @@
 /**
  * Options Page Entry Point
- *
- * Note: This is a simplified TypeScript version.
- * The full implementation would include a comprehensive OptionsUI class.
- * For now, we're providing the controller and config modules, and the
- * existing options.js will continue to work until full migration.
  */
 
 import { Logger } from '@/lib/logger/Logger';
 import { OptionsController } from './OptionsController';
+import { OptionsUI } from './OptionsUI';
 import { OptionsConfig } from './OptionsConfig';
 
 const logger = new Logger('Options');
@@ -23,11 +19,11 @@ async function initializeOptions(): Promise<void> {
     // Get manifest version
     const manifest = chrome.runtime.getManifest();
     const version = manifest.version;
-    document.title = `DelugeFlow v${version}`;
+    document.title = `DelugeFlow Options v${version}`;
 
     const h2 = document.querySelector('h2');
     if (h2) {
-      h2.textContent = `DelugeFlow v${version}`;
+      h2.textContent = `DelugeFlow Options`;
     }
 
     // Create controller
@@ -37,16 +33,20 @@ async function initializeOptions(): Promise<void> {
     await controller.initialize();
     logger.info('Communication initialized');
 
+    // Create and initialize UI
+    const ui = new OptionsUI(controller);
+    await ui.initialize();
+    logger.info('UI initialized');
+
     // Store for debugging
     (window as any).optionsController = controller;
+    (window as any).optionsUI = ui;
     (window as any).OptionsConfig = OptionsConfig;
 
     logger.info('Options page initialized successfully');
-
-    // Note: The existing options.js handles the full UI implementation
-    // This TypeScript version provides the foundation for future migration
   } catch (error) {
     logger.error('Failed to initialize options page:', error);
+    alert('Failed to initialize options page. Check console for details.');
   }
 }
 

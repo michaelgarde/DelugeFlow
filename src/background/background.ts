@@ -347,4 +347,149 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
   });
 });
 
+// ============================================================================
+// Message Handling
+// ============================================================================
+
+/**
+ * Handle messages from content scripts, popup, and options pages
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  logger.debug('Received message:', message.method, message);
+
+  // Handle async operations
+  const handleAsync = async () => {
+    try {
+      const connection = await getConnection();
+
+      switch (message.method) {
+        case 'plugins-getinfo': {
+          // Get plugin info and labels (for options page validation)
+          const result = await connection.validateServerAndGetPlugins(
+            message.url,
+            message.password
+          );
+          sendResponse({ value: result });
+          break;
+        }
+
+        case 'get-server-info': {
+          // Get server information
+          const connections = await StorageManager.getConnections();
+          const primaryIndex = await StorageManager.getPrimaryServerIndex();
+          sendResponse({
+            value: {
+              connections,
+              primaryServerIndex: primaryIndex,
+            },
+          });
+          break;
+        }
+
+        case 'torrent-add': {
+          // Add torrent via URL or magnet
+          await connection.addTorrent(
+            message.torrent_url,
+            message.cookies,
+            message.plugins,
+            message.options,
+            message.server_index
+          );
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'torrent-add-file': {
+          // Add torrent via file data
+          await connection.addTorrentFile(
+            message.data,
+            message.filename,
+            message.options,
+            message.plugins,
+            message.server_index
+          );
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'torrent-list': {
+          // Get torrent list for a server
+          const torrents = await connection.getTorrentList(message.server_index);
+          sendResponse({ value: torrents });
+          break;
+        }
+
+        default:
+          logger.warn('Unknown message method:', message.method);
+          sendResponse({ error: 'Unknown method' });
+      }
+    } catch (error: any) {
+      logger.error('Error handling message:', error);
+      sendResponse({
+        error: true,
+        message: error.message || String(error),
+      });
+    }
+  };
+
+  // Run async handler
+  handleAsync();
+
+  // Return true to indicate we'll send response asynchronously
+  return true;
+});
+
+/**
+ * Handle port connections from content scripts
+ */
+chrome.runtime.onConnect.addListener((port) => {
+  logger.debug('Port connected:', port.name);
+
+  port.onMessage.addListener(async (message) => {
+    logger.debug('Port message received:', message);
+
+    try {
+      const connection = await getConnection();
+
+      switch (message.method) {
+        case 'torrent-add': {
+          await connection.addTorrent(
+            message.torrent_url,
+            message.cookies,
+            message.plugins,
+            message.options,
+            message.server_index
+          );
+          port.postMessage({ success: true, id: message.id });
+          break;
+        }
+
+        case 'get-server-info': {
+          const connections = await StorageManager.getConnections();
+          const primaryIndex = await StorageManager.getPrimaryServerIndex();
+          port.postMessage({
+            value: { connections, primaryServerIndex: primaryIndex },
+            id: message.id,
+          });
+          break;
+        }
+
+        default:
+          port.postMessage({ error: 'Unknown method', id: message.id });
+      }
+    } catch (error: any) {
+      logger.error('Error handling port message:', error);
+      port.postMessage({
+        error: true,
+        message: error.message || String(error),
+        id: message.id,
+      });
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    logger.debug('Port disconnected:', port.name);
+  });
+});
+
 logger.info('Background service worker initialized');
