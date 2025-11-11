@@ -148,8 +148,7 @@ export class PopupController {
     communicator.sendMessage(
       {
         method: 'torrent-list',
-        url: server.url,
-        password: server.pass,
+        server_index: serverIndex,
       },
       (response: any) => {
         if (response && response.value) {

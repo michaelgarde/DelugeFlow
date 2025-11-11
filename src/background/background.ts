@@ -524,6 +524,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
         }
 
+        case 'storage-get-connections': {
+          // Get connections array (used by popup)
+          const connections = await StorageManager.getConnections();
+          sendResponse({ value: connections });
+          break;
+        }
+
         case 'get-server-info': {
           // Get server information (no connection needed)
           const connections = await StorageManager.getConnections();
@@ -633,6 +640,16 @@ chrome.runtime.onConnect.addListener((port) => {
           break;
         }
 
+        case 'storage-get-connections': {
+          // Get connections array (used by popup)
+          const connections = await StorageManager.getConnections();
+          port.postMessage({
+            _id: messageId,
+            _data: { value: connections },
+          });
+          break;
+        }
+
         case 'get-server-info': {
           const connections = await StorageManager.getConnections();
           const primaryIndex = await StorageManager.getPrimaryServerIndex();
@@ -640,6 +657,31 @@ chrome.runtime.onConnect.addListener((port) => {
             _id: messageId,
             _data: { value: { connections, primaryServerIndex: primaryIndex } },
           });
+          break;
+        }
+
+        case 'torrent-list': {
+          // Get torrent list for a server (will connect when needed)
+          const connection = getConnectionInstance();
+          const torrents = await connection.getTorrentList(message.server_index);
+          port.postMessage({
+            _id: messageId,
+            _data: { value: torrents },
+          });
+          break;
+        }
+
+        case 'torrent-add-file': {
+          // Add torrent via file data (will connect when needed)
+          const connection = getConnectionInstance();
+          await connection.addTorrentFile(
+            message.data,
+            message.filename,
+            message.options,
+            message.plugins,
+            message.server_index
+          );
+          port.postMessage({ _id: messageId, _data: { success: true } });
           break;
         }
 
