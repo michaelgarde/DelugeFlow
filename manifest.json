@@ -27,8 +27,10 @@
   "permissions": [
     "cookies",
     "contextMenus",
+    "declarativeNetRequest",
     "downloads",
     "notifications",
+    "offscreen",
     "storage",
     "tabs"
   ],

@@ -32,6 +32,7 @@ export default defineConfig({
         content: path.resolve(__dirname, 'src/content/ContentHandler.ts'),
         popup: path.resolve(__dirname, 'src/popup/popup.ts'),
         options: path.resolve(__dirname, 'src/options/options.ts'),
+        offscreen: path.resolve(__dirname, 'src/offscreen/offscreen.ts'),
       },
       output: {
         entryFileNames: '[name].js',
@@ -57,6 +58,7 @@ export default defineConfig({
           { src: 'manifest.json', dest: 'manifest.json' },
           { src: 'popup.html', dest: 'popup.html' },
           { src: 'options.html', dest: 'options.html' },
+          { src: 'offscreen.html', dest: 'offscreen.html' },
           { src: 'content_handler.css', dest: 'content_handler.css' },
           { src: 'options.css', dest: 'options.css' },
           { src: 'chrome-bootstrap.css', dest: 'chrome-bootstrap.css' },

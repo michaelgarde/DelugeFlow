@@ -119,8 +119,21 @@ export class OptionsController {
    * Validate server credentials and get labels
    */
   async validateServer(url: string, password: string): Promise<ValidationResult> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       logger.debug('Validating server:', url);
+
+      // Ensure communicator is connected (reconnect if needed)
+      if (!communicator._Connected) {
+        logger.important('Communicator not connected, will attempt reconnect');
+        reject(new Error('Background connection lost. Please refresh the page.'));
+        return;
+      }
+
+      // Set a timeout to reject if no response (10 seconds)
+      const timeoutId = setTimeout(() => {
+        logger.error('Validation request timed out');
+        reject(new Error('Request timed out waiting for response'));
+      }, 10000);
 
       this.messenger.send(
         {
@@ -130,10 +143,28 @@ export class OptionsController {
           force_check: true,
         },
         (response: any) => {
+          clearTimeout(timeoutId);
           logger.debug('Validation response:', response);
 
+          if (!response) {
+            logger.error('No response received');
+            reject(new Error('No response from background script'));
+            return;
+          }
+
+          if (response.error) {
+            logger.error('Validation error:', response.error);
+            reject(new Error(response.message || 'Validation failed'));
+            return;
+          }
+
+          // Check if validation was successful
           const isValid = response && response.value && !response.error;
-          const labels = response?.value?.plugins?.Label || [];
+
+          // The response.value is a PluginInfo object with { labels, hasLabelPlugin, etc }
+          const labels = response?.value?.labels || [];
+
+          logger.debug('Parsed validation result:', { isValid, labelCount: labels.length });
 
           resolve({
             isValid,
@@ -146,6 +177,8 @@ export class OptionsController {
 
   /**
    * Load labels for a server
+   * Note: This does NOT validate the server, it just tries to fetch labels
+   * Use validateServer() explicitly if you want to test the connection
    */
   async loadLabelsForServer(serverIndex: number): Promise<string[]> {
     if (serverIndex >= this.connections.length) {
@@ -155,12 +188,14 @@ export class OptionsController {
 
     const connection = this.connections[serverIndex];
     if (!connection.url || !OptionsConfig.URL_REGEX.test(connection.url)) {
-      logger.warn('Invalid server URL for index:', serverIndex);
+      logger.debug('Skipping label load for invalid/empty server URL at index:', serverIndex);
       return [];
     }
 
-    const result = await this.validateServer(connection.url, connection.pass);
-    return result.labels || [];
+    // Don't auto-validate on page load, just return empty array
+    // Labels will be populated when user explicitly tests connection
+    logger.debug('Skipping auto-validation for server:', serverIndex);
+    return [];
   }
 
   /**

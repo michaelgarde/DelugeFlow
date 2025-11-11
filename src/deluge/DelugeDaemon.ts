@@ -84,7 +84,7 @@ export class DelugeDaemon {
     logger.debug('Getting host status for:', hostId);
 
     try {
-      const payload = await this.request.request<[string, any]>(
+      const payload = await this.request.request<[string, string, string]>(
         DELUGE_METHODS.WEB_GET_HOST_STATUS,
         [hostId]
       );
@@ -94,12 +94,14 @@ export class DelugeDaemon {
         throw new DaemonError('Failed to get host status');
       }
 
-      const [status, info] = payload.result;
+      // API returns [hostId, status, version]
+      const [returnedHostId, status, version] = payload.result;
+
       const daemonInfo: DaemonStatusInfo = {
         status,
-        info,
-        hostId,
-        host: this.daemonHosts.find(h => h[0] === hostId),
+        info: { version },
+        hostId: returnedHostId,
+        host: this.daemonHosts.find(h => h[0] === returnedHostId),
       };
 
       logger.debug('Host status:', daemonInfo);

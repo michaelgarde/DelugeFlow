@@ -25,6 +25,11 @@ export class DelugeConnection {
   private connections: Connection[] = [];
   private currentServerIndex = 0;
   private isValidating = false;
+  private customFetch?: typeof fetch;
+
+  constructor(customFetch?: typeof fetch) {
+    this.customFetch = customFetch;
+  }
 
   /**
    * Initialize state from storage
@@ -81,7 +86,7 @@ export class DelugeConnection {
     try {
       // Initialize modules
       this.auth = new DelugeAuth(null as any, connection.pass);
-      this.request = new DelugeRequest(connection.url, this.auth);
+      this.request = new DelugeRequest(connection.url, this.auth, this.customFetch);
       this.auth.setRequestHandler(this.request); // Resolve circular dependency
 
       if (this.isValidating) {
@@ -250,7 +255,7 @@ export class DelugeConnection {
 
     // Create temporary modules for validation
     const auth = new DelugeAuth(null as any, password);
-    const request = new DelugeRequest(url, auth);
+    const request = new DelugeRequest(url, auth, this.customFetch);
     auth.setRequestHandler(request);
     auth.setValidating(true);
 

@@ -72,14 +72,10 @@ export class DelugeAuth {
       throw new AuthenticationError('No password available');
     }
 
-    // For validation, always start fresh by clearing session
+    // For validation, always start fresh by clearing session state
+    // Don't try to delete session from server - it likely doesn't exist yet
     if (this.isValidating) {
-      try {
-        await this.deleteSession();
-      } catch (error) {
-        // Ignore delete errors during validation
-        logger.debug('Failed to delete session during validation (ignored):', error);
-      }
+      this.clearSession();
     } else {
       // Check if we already have a valid session
       const hasValidSession = await this.checkSession();

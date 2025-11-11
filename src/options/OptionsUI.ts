@@ -95,12 +95,16 @@ export class OptionsUI {
         <div class="field-group controls-group">
           <label class="server-label">Server ${index + 1}</label>
           <div class="connection-controls">
+            <button type="button" class="test-connection" data-index="${index}">
+              Test Connection
+            </button>
             <button type="button" class="primary-toggle ${isPrimary ? 'primary' : 'not-primary'}">
               ${isPrimary ? 'Primary' : 'Make Primary'}
             </button>
             <button type="button" class="remove">Remove</button>
           </div>
         </div>
+        <div class="connection-status" id="status-${index}"></div>
       </div>
     `;
 
@@ -137,6 +141,32 @@ export class OptionsUI {
       });
     } catch (error) {
       logger.error('Failed to load labels for server:', index, error);
+    }
+  }
+
+  /**
+   * Populate labels dropdown with provided labels
+   */
+  private async populateLabelsDropdown(index: number, labels: string[]): Promise<void> {
+    const select = document.getElementById(`label-${index}`) as HTMLSelectElement;
+    if (!select) return;
+
+    try {
+      const defaultLabel = await this.controller.getDefaultLabel(index);
+
+      // Clear and repopulate
+      select.innerHTML = '<option value="">No Label</option>';
+      labels.forEach(label => {
+        const option = document.createElement('option');
+        option.value = label;
+        option.textContent = label;
+        if (label === defaultLabel) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+    } catch (error) {
+      logger.error('Failed to populate labels dropdown:', index, error);
     }
   }
 
@@ -239,6 +269,9 @@ export class OptionsUI {
             const index = parseInt(container.getAttribute('data-index') || '0');
             this.handleMakePrimary(index);
           }
+        } else if (target.classList.contains('test-connection')) {
+          const index = parseInt(target.getAttribute('data-index') || '0');
+          this.handleTestConnection(index);
         }
       });
 
@@ -343,6 +376,98 @@ export class OptionsUI {
         btn.textContent = 'Make Primary';
       }
     });
+  }
+
+  /**
+   * Handle test connection
+   */
+  private async handleTestConnection(index: number): Promise<void> {
+    logger.debug('Testing connection:', index);
+
+    const urlInput = document.getElementById(`url-${index}`) as HTMLInputElement;
+    const passInput = document.getElementById(`pass-${index}`) as HTMLInputElement;
+    const statusDiv = document.getElementById(`status-${index}`);
+    const testBtn = document.querySelector(`.test-connection[data-index="${index}"]`) as HTMLButtonElement;
+
+    if (!urlInput || !passInput || !statusDiv) {
+      logger.error('Could not find form elements for server:', index);
+      return;
+    }
+
+    const url = urlInput.value.trim();
+    const password = passInput.value.trim();
+
+    if (!url) {
+      statusDiv.innerHTML = '<span style="color: var(--color-error);">⚠ Please enter a server URL</span>';
+      return;
+    }
+
+    if (!password) {
+      statusDiv.innerHTML = '<span style="color: var(--color-error);">⚠ Please enter a password</span>';
+      return;
+    }
+
+    // Show loading state
+    if (testBtn) {
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing...';
+    }
+    statusDiv.innerHTML = '<span style="color: var(--color-text-secondary);">Testing connection...</span>';
+
+    try {
+      // Wait a moment to ensure background worker is awake
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create timeout promise (10 seconds)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Connection test timed out after 10 seconds')), 10000);
+      });
+
+      // Race between validation and timeout
+      const result = await Promise.race([
+        this.controller.validateServer(url, password),
+        timeoutPromise,
+      ]) as { isValid: boolean; labels?: string[] };
+
+      if (result.isValid) {
+        const labelCount = result.labels?.length || 0;
+        statusDiv.innerHTML = `<span style="color: #0f9d58;">✓ Connection successful! Found ${labelCount} labels.</span>`;
+
+        // Save the connection after successful test
+        await this.handleSaveConnections();
+
+        // Populate labels for this server
+        if (result.labels && result.labels.length > 0) {
+          await this.populateLabelsDropdown(index, result.labels);
+        }
+      } else {
+        statusDiv.innerHTML = '<span style="color: var(--color-error);">✗ Connection failed. Check URL and password.</span>';
+      }
+    } catch (error: any) {
+      logger.error('Connection test failed:', error);
+      const message = error.message || 'Unknown error';
+      statusDiv.innerHTML = `<span style="color: var(--color-error);">✗ Error: ${this.escapeHtml(message)}</span>`;
+    } finally {
+      // Restore button state
+      if (testBtn) {
+        testBtn.disabled = false;
+        testBtn.textContent = 'Test Connection';
+      }
+
+      // Clear status after 10 seconds
+      setTimeout(() => {
+        statusDiv.innerHTML = '';
+      }, 10000);
+    }
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   */
+  private escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   /**

@@ -11,22 +11,30 @@ const logger = new Logger('DelugeRequest');
  */
 export class DelugeRequest {
   private state = '';
+  private fetchFn: typeof fetch;
+  private retryCount = 0;
+  private maxRetries = 2;
 
   constructor(
     private serverUrl: string,
-    private auth: DelugeAuth
-  ) {}
+    private auth: DelugeAuth,
+    customFetch?: typeof fetch
+  ) {
+    this.fetchFn = customFetch || fetch.bind(globalThis);
+  }
 
   /**
    * Make a JSON-RPC request to Deluge server
    * @param method - Deluge API method name
    * @param params - Method parameters
    * @param silent - Don't log errors or show notifications
+   * @param _retryAttempt - Internal retry counter (do not use externally)
    */
   async request<T = unknown>(
     method: string,
     params: unknown[] = [],
-    silent = false
+    silent = false,
+    _retryAttempt = 0
   ): Promise<DelugeResponse<T>> {
     this.state = method;
 
@@ -45,7 +53,7 @@ export class DelugeRequest {
     logger.debug('Request URL (sanitized):', this.sanitizeUrl(url));
 
     // Build headers with session/CSRF
-    const headers = this.buildHeaders();
+    const headers = await this.buildHeaders();
 
     // Build request body
     const requestBody: DelugeReq = {
@@ -59,7 +67,7 @@ export class DelugeRequest {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
-      credentials: 'include',
+      // Note: credentials omitted - we handle cookies manually via headers
     };
 
     logger.debug('Making fetch request:', {
@@ -114,14 +122,23 @@ export class DelugeRequest {
 
         // Handle authentication errors
         if (this.auth.isAuthError(payload)) {
-          logger.debug('Authentication error detected, attempting to re-authenticate');
+          if (_retryAttempt >= this.maxRetries) {
+            logger.error('Max retry attempts reached for authentication');
+            throw new AuthenticationError('Authentication failed after multiple retries');
+          }
+
+          logger.debug(`Authentication error detected, attempting to re-authenticate (attempt ${_retryAttempt + 1}/${this.maxRetries})`);
+
+          // Add delay before retrying (exponential backoff)
+          const delay = Math.min(1000 * Math.pow(2, _retryAttempt), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
 
           // Clear session state
           this.auth.clearSession();
 
-          // Re-login and retry
+          // Re-login and retry with incremented counter
           await this.auth.login(silent);
-          return this.request<T>(method, params, silent);
+          return this.request<T>(method, params, silent, _retryAttempt + 1);
         }
 
         throw new Error(payload.error.message || 'Unknown server error');
@@ -163,7 +180,7 @@ export class DelugeRequest {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchFn(url, {
         ...options,
         signal: controller.signal,
       });
@@ -193,29 +210,21 @@ export class DelugeRequest {
   /**
    * Build request headers with session and CSRF
    */
-  private buildHeaders(): Record<string, string> {
+  private async buildHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    // Add session cookie
-    const sessionCookie = this.auth.getSessionCookie();
-    const sessionId = this.auth.getSessionId();
+    // Note: Cookie header cannot be set manually in fetch() - it's a forbidden header
+    // Instead, we'll use chrome.cookies API to set cookies, and credentials: 'include' to send them
+    // For now, we'll use session ID in the URL or as a custom header if needed
 
-    if (sessionCookie) {
-      logger.debug('Adding session cookie to request');
-      headers['Cookie'] = sessionCookie;
-    } else if (sessionId) {
-      logger.debug('Adding session ID as cookie to request');
-      headers['Cookie'] = `_session_id=${sessionId}`;
-    }
-
-    // Add CSRF token
+    // Add CSRF token as custom header (Deluge supports this)
     const csrfToken = this.auth.getCsrfToken();
     if (csrfToken) {
       logger.debug('Adding CSRF token to request');
-      headers['X-CSRF-Token'] = csrfToken;
+      headers['X-Deluge-Token'] = csrfToken;
     }
 
     return headers;

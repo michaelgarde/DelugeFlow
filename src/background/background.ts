@@ -25,6 +25,105 @@ let delugeConnection: DelugeConnection | null = null;
 // Cache intercept setting for faster synchronous access
 let interceptEnabled = true;
 
+// Offscreen document state
+let offscreenDocumentCreated = false;
+
+/**
+ * Ensure offscreen document exists
+ */
+async function ensureOffscreenDocument(): Promise<void> {
+  if (offscreenDocumentCreated) {
+    return;
+  }
+
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: [chrome.offscreen.Reason.DOM_SCRAPING], // Using DOM_SCRAPING as the closest reason
+      justification: 'Make fetch requests that can be intercepted by service worker fetch handler for CORS handling',
+    });
+    offscreenDocumentCreated = true;
+    logger.info('Offscreen document created');
+  } catch (error: any) {
+    // Document may already exist
+    if (error.message?.includes('Only a single offscreen')) {
+      offscreenDocumentCreated = true;
+      logger.debug('Offscreen document already exists');
+    } else {
+      logger.error('Failed to create offscreen document:', error);
+      throw error;
+    }
+  }
+}
+
+/**
+ * Make a fetch request via the offscreen document
+ */
+export async function fetchViaOffscreen(url: string, options?: RequestInit): Promise<Response> {
+  await ensureOffscreenDocument();
+
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 10000; // 10 second timeout
+
+    const timeoutId = setTimeout(() => {
+      logger.debug('Offscreen fetch timed out after 10s');
+      reject(new Error('Request timeout'));
+    }, timeoutMs);
+
+    // Strip out non-serializable properties from options
+    const serializableOptions = options ? {
+      method: options.method,
+      headers: options.headers,
+      body: options.body,
+      credentials: options.credentials,
+      mode: options.mode,
+      cache: options.cache,
+      redirect: options.redirect,
+      referrer: options.referrer,
+      integrity: options.integrity,
+    } : undefined;
+
+    chrome.runtime.sendMessage(
+      {
+        type: 'FETCH_REQUEST',
+        url,
+        options: serializableOptions,
+      },
+      (response) => {
+        clearTimeout(timeoutId);
+
+        if (chrome.runtime.lastError) {
+          logger.error('Offscreen fetch error:', chrome.runtime.lastError.message);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        if (!response) {
+          logger.error('No response from offscreen document');
+          reject(new Error('No response from offscreen document'));
+          return;
+        }
+
+        if (response.error) {
+          logger.error('Offscreen fetch returned error:', response.message);
+          reject(new Error(response.message));
+          return;
+        }
+
+        // Reconstruct Response object
+        const headers = new Headers(response.headers);
+        const reconstructedResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
+
+        resolve(reconstructedResponse);
+      }
+    );
+  });
+}
+
 /**
  * Initialize Deluge connection
  */
@@ -32,6 +131,7 @@ async function initializeConnection(): Promise<void> {
   try {
     if (!delugeConnection) {
       logger.debug('Creating new DelugeConnection instance');
+      // Use native fetch - service workers with host_permissions bypass CORS
       delugeConnection = new DelugeConnection();
     }
 
@@ -45,15 +145,13 @@ async function initializeConnection(): Promise<void> {
 }
 
 /**
- * Get or create Deluge connection
+ * Get or create Deluge connection (without auto-connecting)
  */
-async function getConnection(): Promise<DelugeConnection> {
+function getConnectionInstance(): DelugeConnection {
   if (!delugeConnection) {
-    await initializeConnection();
-  }
-
-  if (!delugeConnection) {
-    throw new Error('Failed to initialize Deluge connection');
+    logger.debug('Creating new DelugeConnection instance');
+    // Use native fetch - service workers with host_permissions bypass CORS
+    delugeConnection = new DelugeConnection();
   }
 
   return delugeConnection;
@@ -211,8 +309,10 @@ async function handleTorrentDownload(downloadItem: chrome.downloads.DownloadItem
       logger.info('Using filename:', filename);
 
       // Get connection and add torrent
-      const connection = await getConnection();
-      await connection.addTorrentFile(base64, filename);
+      const connection = getConnectionInstance();
+      // Get primary server index and connect
+      const primaryIndex = await StorageManager.getPrimaryServerIndex();
+      await connection.addTorrentFile(base64, filename, undefined, undefined, primaryIndex);
 
       logger.info('Torrent added to Deluge successfully:', filename);
 
@@ -247,16 +347,67 @@ async function handleTorrentDownload(downloadItem: chrome.downloads.DownloadItem
 // Service Worker Lifecycle
 // ============================================================================
 
+/**
+ * Setup declarativeNetRequest rules for CORS handling
+ */
+async function setupCORSRules(): Promise<void> {
+  try {
+    // Add rule to modify response headers for Deluge servers
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [1], // Remove existing rule if any
+      addRules: [
+        {
+          id: 1,
+          priority: 1,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+              {
+                header: 'Access-Control-Allow-Origin',
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: '*',
+              },
+              {
+                header: 'Access-Control-Allow-Methods',
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: 'GET, POST, PUT, DELETE, OPTIONS',
+              },
+              {
+                header: 'Access-Control-Allow-Headers',
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: 'Content-Type, X-Deluge-Token, X-CSRF-Token',
+              },
+            ],
+          },
+          condition: {
+            urlFilter: '*/json',
+            resourceTypes: [chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST],
+          },
+        },
+      ],
+    });
+    logger.info('CORS rules configured');
+  } catch (error) {
+    logger.error('Failed to setup CORS rules:', error);
+  }
+}
+
 self.addEventListener('install', (event: ExtendableEvent) => {
   logger.info('Service Worker: Installing');
-  // Ensure the service worker activates immediately
-  event.waitUntil(self.skipWaiting());
+  // Ensure the service worker activates immediately and setup CORS rules
+  event.waitUntil(Promise.all([
+    self.skipWaiting(),
+    setupCORSRules(),
+  ]));
 });
 
 self.addEventListener('activate', (event: ExtendableEvent) => {
   logger.info('Service Worker: Activated');
-  // Ensure the service worker takes control immediately
-  event.waitUntil(self.clients.claim());
+  // Ensure the service worker takes control immediately and setup CORS rules
+  event.waitUntil(Promise.all([
+    self.clients.claim(),
+    setupCORSRules(),
+  ]));
 });
 
 // ============================================================================
@@ -269,10 +420,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   // Check if this is a JSON request to the Deluge server
   if (url.pathname.endsWith('/json')) {
     event.respondWith(
-      fetch(event.request.clone(), {
-        credentials: 'include',
-        mode: 'cors',
-      })
+      fetch(event.request.clone())
         .then((response) => {
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -360,21 +508,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle async operations
   const handleAsync = async () => {
     try {
-      const connection = await getConnection();
-
       switch (message.method) {
         case 'plugins-getinfo': {
           // Get plugin info and labels (for options page validation)
+          // This creates a temporary connection and doesn't affect the main instance
+          logger.debug('Starting server validation for:', message.url);
+          const connection = getConnectionInstance();
+          logger.debug('Got connection instance, calling validateServerAndGetPlugins...');
           const result = await connection.validateServerAndGetPlugins(
             message.url,
             message.password
           );
+          logger.debug('Validation successful, sending response:', result);
           sendResponse({ value: result });
           break;
         }
 
         case 'get-server-info': {
-          // Get server information
+          // Get server information (no connection needed)
           const connections = await StorageManager.getConnections();
           const primaryIndex = await StorageManager.getPrimaryServerIndex();
           sendResponse({
@@ -387,7 +538,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         case 'torrent-add': {
-          // Add torrent via URL or magnet
+          // Add torrent via URL or magnet (will connect when needed)
+          const connection = getConnectionInstance();
           await connection.addTorrent(
             message.torrent_url,
             message.cookies,
@@ -400,7 +552,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         case 'torrent-add-file': {
-          // Add torrent via file data
+          // Add torrent via file data (will connect when needed)
+          const connection = getConnectionInstance();
           await connection.addTorrentFile(
             message.data,
             message.filename,
@@ -413,7 +566,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         case 'torrent-list': {
-          // Get torrent list for a server
+          // Get torrent list for a server (will connect when needed)
+          const connection = getConnectionInstance();
           const torrents = await connection.getTorrentList(message.server_index);
           sendResponse({ value: torrents });
           break;
@@ -445,14 +599,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.runtime.onConnect.addListener((port) => {
   logger.debug('Port connected:', port.name);
 
-  port.onMessage.addListener(async (message) => {
+  port.onMessage.addListener(async (req: any) => {
+    // Unwrap message from communicator format: { _id, _isTab, _data }
+    const messageId = req._id;
+    const message = req._data;
+
     logger.debug('Port message received:', message);
 
     try {
-      const connection = await getConnection();
-
       switch (message.method) {
+        case 'plugins-getinfo': {
+          // Get plugin info and labels (for options page validation)
+          const connection = getConnectionInstance();
+          const result = await connection.validateServerAndGetPlugins(
+            message.url,
+            message.password
+          );
+          // Wrap response in communicator format
+          port.postMessage({ _id: messageId, _data: { value: result } });
+          break;
+        }
+
         case 'torrent-add': {
+          const connection = getConnectionInstance();
           await connection.addTorrent(
             message.torrent_url,
             message.cookies,
@@ -460,7 +629,7 @@ chrome.runtime.onConnect.addListener((port) => {
             message.options,
             message.server_index
           );
-          port.postMessage({ success: true, id: message.id });
+          port.postMessage({ _id: messageId, _data: { success: true } });
           break;
         }
 
@@ -468,21 +637,23 @@ chrome.runtime.onConnect.addListener((port) => {
           const connections = await StorageManager.getConnections();
           const primaryIndex = await StorageManager.getPrimaryServerIndex();
           port.postMessage({
-            value: { connections, primaryServerIndex: primaryIndex },
-            id: message.id,
+            _id: messageId,
+            _data: { value: { connections, primaryServerIndex: primaryIndex } },
           });
           break;
         }
 
         default:
-          port.postMessage({ error: 'Unknown method', id: message.id });
+          port.postMessage({ _id: messageId, _data: { error: 'Unknown method' } });
       }
     } catch (error: any) {
       logger.error('Error handling port message:', error);
       port.postMessage({
-        error: true,
-        message: error.message || String(error),
-        id: message.id,
+        _id: messageId,
+        _data: {
+          error: true,
+          message: error.message || String(error),
+        },
       });
     }
   });
