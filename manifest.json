@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DelugeFlow",
   "short_name": "DelugeFlow",
-  "version": "0.80.0",
+  "version": "0.90.0",
   "default_locale": "en",
   "description": "Send torrent links to your Deluge server.",
   "homepage_url": "https://github.com/d8ahazard/DelugeFlow/",
@@ -27,27 +27,30 @@
   "permissions": [
     "cookies",
     "contextMenus",
+    "declarativeNetRequest",
     "downloads",
     "notifications",
+    "offscreen",
     "storage",
     "tabs"
   ],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [{
     "all_frames": true,
-    "matches": ["<all_urls>"], 
+    "matches": ["<all_urls>"],
     "js": [
       "lib/logger.js",
-      "lib/utils.js", 
-      "lib/controller_communicator.js", 
-      "content_handler.js"
+      "lib/utils.js",
+      "lib/controller_communicator.js",
+      "content.js"
     ],
     "css": [
       "content_handler.css"
     ]
   }],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "web_accessible_resources": [
     {

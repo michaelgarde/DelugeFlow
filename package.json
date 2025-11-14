@@ -1,7 +1,8 @@
 {
   "name": "DelugeFlow",
-  "version": "0.80.0",
-  "description": "Author: S Bussetti",
+  "version": "0.90.0",
+  "description": "Chrome extension for sending torrent links to Deluge servers",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/d8ahazard/DelugeFlow.git"
@@ -12,15 +13,26 @@
     "url": "https://github.com/d8ahazard/DelugeFlow/issues"
   },
   "homepage": "https://github.com/d8ahazard/DelugeFlow",
+  "scripts": {
+    "build": "npm run type-check && vite build",
+    "watch": "tsc --watch --noEmit",
+    "package": "npm run build && node scripts/package.mjs",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "bencode": "^4.0.0",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.5"
+  },
   "devDependencies": {
-    "gulp": "^5.0.1",
-    "gulp-concat": "^2.6.1",
-    "gulp-copy": "^5.0.0",
-    "gulp-notify": "^5.0.0",
-    "gulp-plumber": "^1.1.0",
-    "gulp-sourcemaps": "^2.6.4",
-    "gulp-terser": "^2.1.0",
-    "gulp-uglifycss": "^1.0.6",
-    "gulp-zip": "^6.1.0"
+    "@types/bencode": "^2.0.4",
+    "@types/chrome": "^0.0.268",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "archiver": "^7.0.1",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.4",
+    "vite": "^7.2.2"
   }
 }

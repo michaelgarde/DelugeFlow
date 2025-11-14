@@ -479,3 +479,44 @@ button.not-primary:hover {
 #connections {
   margin-bottom: 30px;
 }
+
+/* Test connection button */
+.test-connection {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.test-connection:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-input-focus);
+}
+
+.test-connection:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Connection status */
+.connection-status {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 20px;
+}
+
+.connection-status:empty {
+  display: none;
+}
+
+.connection-status span {
+  display: inline-block;
+}
